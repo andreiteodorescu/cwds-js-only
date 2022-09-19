@@ -1,0 +1,268 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Assignment JS Only</title>
+
+    <style>
+        .hidden {
+            display: none;
+        }
+
+        .table-wrapper td, .table-wrapper th {
+            text-align: left;
+            padding: 10px;
+        }
+    </style>
+
+</head>
+<body>
+<!-- The focus here was to do the assignment in vanilla js only. No focus on: styling, html semantics or accessibility. Only the js logic. -->
+
+<div class="top-panel" style="display: flex; margin-bottom: 30px; padding-left: 10px;">
+    <input class="top-panel-select-all" type="checkbox" id="selectAll" name="selectAll" style="margin-right: 20px;"/>
+
+    <div style="margin-right: 20px;">
+        <div class="top-panel-selected-count hidden">Selected <span class="top-panel-selected-count-numb"></span></div>
+        <div class="top-panel-selected-none">None Selected</div>
+    </div>
+
+    <button class="top-panel-dwn" type="button" disabled>Download selected</button>
+</div>
+
+<div class="table-wrapper">
+    <table id="files-table">
+        <thead>
+            <tr>
+                <th>&nbsp;</th>
+                <th>Name</th>
+                <th>Device</th>
+                <th>Path</th>
+                <th>Status</th>
+            </tr>
+        </thead>
+        <tbody>
+        <!-- existing will be included here -->
+        </tbody>
+    </table>
+
+    <template id="files-table-row">
+        <tr>
+            <td></td>
+            <td></td>
+            <td></td>
+            <td></td>
+            <td></td>
+        </tr>
+    </template>
+</div>
+
+<dialog class="dialog">
+    <div class="dialog-has-files">
+        <p class="dialog-title">The following files are available for download</p>
+        <ul class="dialog-list"></ul>
+    </div>
+    <button class="dialog-close" type="button">OK</button>
+</dialog>
+
+<script src="utils/cleaned-files-data.js"></script>
+
+<script>
+
+    (function() {
+        let checkedArr = [];
+        let checkedAvailable = [];
+        const selectAllCheckbox = document.getElementById("selectAll");
+        const selectedCount = document.querySelector(".top-panel-selected-count");
+        const selectedCountNumb = document.querySelector(".top-panel-selected-count-numb");
+        const selectedNone = document.querySelector(".top-panel-selected-none");
+        const downSelectedBtn = document.querySelector(".top-panel-dwn");
+        const dialogWindow = document.querySelector(".dialog");
+        const dialogClose = document.querySelector(".dialog-close");
+
+        // Create the table rows with data from cleanedFiles array
+        const createDataTable = () => {
+            // Instantiate the table with the existing HTML tbody
+            // and the row with the template
+            const tbody = document.querySelector("#files-table tbody");
+            const template = document.querySelector('#files-table-row');
+
+            let clone = [];
+            for (let i = 0; i < cleanedFiles.length; i++) {
+                const obj = cleanedFiles[i];
+                // Clone the new row and insert it into the table
+                clone[i] = template.content.cloneNode(true);
+                let td = clone[i].querySelectorAll("td");
+                td[0].innerHTML = `<input class="dashboard-table-checkbox" type="checkbox" name="${obj.name}"/>`;
+                td[1].textContent = `${obj.name}`;
+                td[2].textContent = `${obj.device}`;
+                td[3].textContent = `${obj.path}`;
+                td[4].textContent = `${obj.status}`;
+                tbody.appendChild(clone[i]);
+            }
+        };
+
+        createDataTable();
+
+        // Variable definition here after elements are added to the dom with createDataTable()
+        const genCheckboxes = document.querySelectorAll(".dashboard-table-checkbox");
+
+        // General checkboxes on change logic
+        const handleGenCheck = (e) => {
+            const name = e.target.name;
+
+            // Get the object from cleaned data js of which the name matches the one checked
+            const checkedFilter = cleanedFiles.filter(obj => {
+                return obj.name === name;
+            });
+
+            if (e.target.checked) {
+                // and put it in the new array.
+                checkedArr.push(checkedFilter[0]);
+            } else {
+                // and remove it when the checkbox is unchecked.
+                const checkedEntryIndex = checkedArr.indexOf(checkedFilter[0]);
+                checkedArr.splice(checkedEntryIndex, 1);
+            }
+
+            // populate de "available" files array with entries
+            checkedAvailable = checkedArr.filter(obj => {
+                return obj.status === "available";
+            });
+
+            // Make select all checkbox indeterminate
+            if (checkedArr.length > 0 && checkedArr.length < cleanedFiles.length) {
+                selectAllCheckbox.indeterminate = true;
+
+                // Change the selected count number
+                selectedCountNumb.textContent = checkedArr.length;
+                selectedCount.classList.remove("hidden");
+                selectedNone.classList.add("hidden");
+            } else {
+                selectAllCheckbox.indeterminate = false;
+            }
+
+            // Make select all checkbox true when all are selected
+            if (checkedArr.length === cleanedFiles.length) {
+                selectAllCheckbox.checked = true;
+
+                // Change the selected count number
+                selectedCountNumb.textContent = checkedArr.length;
+                selectedCount.classList.remove("hidden");
+                selectedNone.classList.add("hidden");
+            }
+
+            // Make select all checkbox false when none are selected
+            if (checkedArr.length === 0) {
+                selectAllCheckbox.checked = false;
+
+                // Show none selected
+                selectedCount.classList.add("hidden");
+                selectedNone.classList.remove("hidden");
+            }
+
+            // Toggle the download button disabled state
+            if (checkedAvailable.length > 0) {
+                downSelectedBtn.disabled = false;
+
+                // Add checked file to localstorage
+                localStorage.setItem("availableForDownload", JSON.stringify(checkedAvailable));
+            } else {
+                downSelectedBtn.disabled = true;
+
+                // Remove unchecked file to localstorage
+                let availableDwn = JSON.parse(localStorage.getItem("availableForDownload"))
+                const availableDwnIndex = availableDwn.indexOf(checkedAvailable[0])
+                availableDwn.splice(availableDwnIndex, 1)
+                // Save back to localStorage with unchecked file removed
+                localStorage.setItem("availableForDownload", JSON.stringify(availableDwn))
+            }
+        };
+
+        // check /uncheck all checkboxes logic
+        const handleCheckAll = (e) => {
+            // make all checkboxes checked/unchecked
+            genCheckboxes.forEach(checkbox => {
+                if (!e.target.checked) {
+                    checkbox.checked = false;
+                } else {
+                    checkbox.checked = true;
+                }
+            });
+
+            // populate the array
+            checkedArr = [...cleanedFiles];
+
+            // Change the selected count number
+            selectedCountNumb.textContent = checkedArr.length;
+            selectedCount.classList.remove("hidden");
+            selectedNone.classList.add("hidden");
+
+            // empty the array on uncheck
+            if (!e.target.checked) {
+                checkedArr = [];
+
+                // empty localstorage array
+                localStorage.removeItem("availableForDownload");
+
+                // Show none selected
+                selectedCount.classList.add("hidden");
+                selectedNone.classList.remove("hidden");
+            }
+
+            // populate de "available" files array with entries
+            checkedAvailable = checkedArr.filter(obj => {
+                return obj.status === "available";
+            });
+
+            // Add checked file to localstorage
+            localStorage.setItem("availableForDownload", JSON.stringify(checkedAvailable));
+
+            // Toggle the download button disabled state
+            if (checkedAvailable.length > 0) {
+                downSelectedBtn.disabled = false;
+            } else {
+                downSelectedBtn.disabled = true;
+            }
+        };
+
+        // Download Selected button click logic
+        const handleDownloadSelected = () => {
+            dialogWindow.showModal();
+
+            const dialogContainer = document.querySelector(".dialog-has-files");
+            const dialogULPlaceholder = document.querySelector(".dialog-list");
+            const dialogUL = document.createElement("ul");
+            const availableDwnLS = localStorage.getItem("availableForDownload");
+            const availableDwn = JSON.parse(availableDwnLS);
+
+            // Create the list items with device and path
+            for (let i = 0; i < availableDwn.length; i++) {
+                const file = availableDwn[i];
+                const dialogLI = document.createElement("li");
+                dialogLI.textContent = `${file.device}, ${file.path}`;
+                dialogUL.appendChild(dialogLI);
+            }
+
+            dialogContainer.replaceChild(dialogUL, dialogULPlaceholder);
+            dialogUL.classList.add("dialog-list");
+        };
+
+        const handleDialogClose = () => {
+            dialogWindow.close();
+        };
+
+        genCheckboxes.forEach(checkbox => {
+            checkbox.addEventListener("change", handleGenCheck);
+        });
+
+        selectAllCheckbox.addEventListener("change", handleCheckAll);
+
+        downSelectedBtn.addEventListener("click", handleDownloadSelected);
+
+        dialogClose.addEventListener("click", handleDialogClose);
+    }());
+
+</script>
+</body>
+</html>
